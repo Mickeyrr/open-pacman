@@ -60,7 +60,7 @@ function createGame() {
       kind: g.kind,
       color: g.color,
       scatter: g.scatter ? { x: g.scatter.x, y: g.scatter.y } : { x: 0, y: -3 },
-      inHouse: true,
+      houseState: 'waiting',
       releaseTime: i * 1500,
     } ) ),
     mode: 'scatter',
@@ -140,9 +140,9 @@ function getTarget( game, g ) {
   const ghosts = game.ghosts;
   const mode = game.mode;
 
-  if ( g.inHouse ) {
-    // Try to go up towards door when in house / leaving
-    return { x: 13.5, y: 11 };
+  if ( g.houseState !== 'out' ) {
+    // Mientras espera o sale, el objetivo es la salida de la casa.
+    return { x: 13.5, y: PEN_EXIT_ROW };
   }
 
   if ( mode === 'scatter' ) {
@@ -223,11 +223,11 @@ function moveGhost( game, g ) {
     g.y = Math.round( g.y );
 
     // Handle house release
-    if ( g.inHouse ) {
+    if ( g.houseState === 'waiting' ) {
       if ( game.elapsedTime >= g.releaseTime ) {
         // Try to exit house - go up through door area
         if ( canMove( grid, g.x, g.y, 'up', 'ghost' ) ) {
-          g.inHouse = false;
+          g.houseState = 'out';
           g.dir = 'up';
         } else {
           // If can't move up, try to decide normally
@@ -261,7 +261,7 @@ function resetPositions( game ) {
     g.x = start.x;
     g.y = start.y;
     g.dir = 'up';
-    g.inHouse = true;
+    g.houseState = 'waiting';
     g.releaseTime = i * 1500;
     if ( start.color ) g.color = start.color;
     if ( start.scatter ) g.scatter = { x: start.scatter.x, y: start.scatter.y };
