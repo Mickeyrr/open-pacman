@@ -238,23 +238,24 @@ function moveGhost( game, g ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
 
-    // Handle house release
+    // Liberacion y salida de la casa.
     if ( g.houseState === 'waiting' ) {
-      if ( game.elapsedTime >= g.releaseTime ) {
-        // Try to exit house - go up through door area
-        if ( canMove( grid, g.x, g.y, 'up', 'ghost' ) ) {
-          g.houseState = 'out';
-          g.dir = 'up';
-        } else {
-          // If can't move up, try to decide normally
-          decideGhost( game, g );
-          if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
-        }
-      } else {
-        // Still in house, wait
-        return;
+      if ( game.elapsedTime < g.releaseTime ) return;
+      g.houseState = 'exiting';
+      g.dir = 'up';
+    }
+
+    if ( g.houseState === 'exiting' ) {
+      g.dir = 'up';
+      if ( g.y <= PEN_EXIT_ROW ) {
+        g.houseState = 'out';
+      } else if ( !canMove( grid, g.x, g.y, 'up', 'ghost' ) ) {
+        // Guarda defensiva: evita quedarse bloqueado si no puede subir.
+        g.houseState = 'out';
       }
-    } else {
+    }
+
+    if ( g.houseState === 'out' ) {
       decideGhost( game, g );
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
     }
