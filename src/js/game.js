@@ -111,15 +111,18 @@ function isPenCell( x, y ) {
 }
 
 // Puede el actor avanzar desde (x,y) en la direccion dir?
-function canMove( grid, x, y, dir, actor ) {
+// ghostState 'eaten' permite cruzar la puerta en cualquier direccion.
+function canMove( grid, x, y, dir, actor, ghostState ) {
   const d = DIRS[ dir ];
   if ( !d ) return false;
   const tx = x + d.x;
   const ty = y + d.y;
   // Tunel: salir por un borde en la fila del tunel siempre es valido.
   if ( ty === TUNNEL_ROW && ( tx < 0 || tx >= grid[ 0 ].length ) ) return true;
-  // Puerta de un solo sentido: el fantasma solo la cruza hacia arriba desde dentro.
+  // Puerta: los ojos la cruzan en cualquier sentido; el resto de fantasmas
+  // solo hacia arriba desde dentro del pen.
   if ( actor === 'ghost' && isDoor( grid, tx, ty ) ) {
+    if ( ghostState === 'eaten' ) return true;
     return dir === 'up' && isPenCell( x, y );
   }
   return !isWall( grid, tx, ty, actor );
@@ -256,6 +259,29 @@ function decideFrightenedGhost( game, g ) {
   g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
 }
 
+function decideEatenGhost( game, g ) {
+  const grid = game.grid;
+  // Los ojos ignoran la regla de no-reversa y apuntan al centro del pen.
+  let best = g.dir;
+  let bestDist = Infinity;
+  for ( const dir of Object.keys( DIRS ) ) {
+    if ( !canMove( grid, g.x, g.y, dir, 'ghost', 'eaten' ) ) continue;
+    const d = DIRS[ dir ];
+    let nx = g.x + d.x;
+    let ny = g.y + d.y;
+    if ( ny === TUNNEL_ROW ) {
+      if ( nx < 0 ) nx += grid[ 0 ].length;
+      else if ( nx >= grid[ 0 ].length ) nx -= grid[ 0 ].length;
+    }
+    const dist = Math.abs( nx - PEN_TARGET.x ) + Math.abs( ny - PEN_TARGET.y );
+    if ( dist < bestDist ) {
+      bestDist = dist;
+      best = dir;
+    }
+  }
+  g.dir = best;
+}
+
 function moveGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
@@ -279,6 +305,18 @@ function moveGhost( game, g ) {
         // Guarda defensiva: evita quedarse bloqueado si no puede subir.
         g.houseState = 'out';
       }
+    }
+
+    if ( g.houseState === 'eaten' ) {
+      if ( isPenCell( g.x, g.y ) ) {
+        g.houseState = 'waiting';
+        g.dir = 'up';
+        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
+        g.speed = GHOST_SPEED;
+        return;
+      }
+      decideEatenGhost( game, g );
+      if ( !canMove( grid, g.x, g.y, g.dir, 'ghost', 'eaten' ) ) return;
     }
 
     if ( g.houseState === 'out' ) {
