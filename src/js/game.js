@@ -246,6 +246,16 @@ function decideGhost( game, g ) {
   g.dir = best;
 }
 
+function decideFrightenedGhost( game, g ) {
+  const grid = game.grid;
+  // Movimiento aleatorio sin reversa, salvo que sea el unico camino.
+  const options = Object.keys( DIRS ).filter(
+    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+  );
+  const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
+  g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
+}
+
 function moveGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
@@ -272,14 +282,16 @@ function moveGhost( game, g ) {
     }
 
     if ( g.houseState === 'out' ) {
-      decideGhost( game, g );
+      if ( game.frightMode ) decideFrightenedGhost( game, g );
+      else decideGhost( game, g );
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
     }
   }
 
   const d = DIRS[ g.dir ];
-  g.x += d.x * g.speed;
-  g.y += d.y * g.speed;
+  const speed = game.frightMode && g.houseState === 'out' ? FRIGHT_GHOST_SPEED : g.speed;
+  g.x += d.x * speed;
+  g.y += d.y * speed;
   wrapTunnel( g, width );
 }
 
