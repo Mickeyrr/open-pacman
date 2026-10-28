@@ -25,7 +25,6 @@ const EATEN_RELEASE_DELAY = 1000; // ms en el pen antes de volver a salir
 const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
 const PEN_DOOR_ROW = 12;
 const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
-const PEN_TARGET = { x: 13.5, y: 13 };
 
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
@@ -64,6 +63,7 @@ function createGame() {
     ghosts: GHOST_STARTS.map( ( g, i ) => ( {
       x: g.x,
       y: g.y,
+      home: { x: g.x, y: g.y },
       dir: 'up',
       speed: GHOST_SPEED,
       kind: g.kind,
@@ -134,6 +134,23 @@ function wrapTunnel( a, width ) {
     if ( a.x < 0 ) a.x += width;
     else if ( a.x >= width ) a.x -= width;
   }
+}
+
+// Avanza hacia el siguiente centro de celda sin pasarlo, para que cualquier
+// velocidad termine siempre alineada a la rejilla.
+function advanceToNextCell( actor, speed ) {
+  const d = DIRS[ actor.dir ];
+  if ( !d ) return;
+  if ( d.x !== 0 ) actor.x = stepAxis( actor.x, d.x, speed );
+  if ( d.y !== 0 ) actor.y = stepAxis( actor.y, d.y, speed );
+}
+
+function stepAxis( pos, sign, speed ) {
+  const nextCenter = sign > 0 ? Math.ceil( pos + 1e-9 ) : Math.floor( pos - 1e-9 );
+  const distance = Math.abs( nextCenter - pos );
+  // Asignar el entero exacto evita arrastrar error de coma flotante.
+  if ( distance <= speed ) return nextCenter;
+  return pos + sign * speed;
 }
 
 function movePacman( game ) {
@@ -264,8 +281,8 @@ function decideEatenGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
   const height = grid.length;
-  // BFS al pen: el greedy Manhattan se queda oscilando en minimos locales.
-  const goal = { x: Math.floor( PEN_TARGET.x ), y: PEN_TARGET.y };
+  // BFS a su celda de inicio: el greedy Manhattan se queda oscilando en minimos locales.
+  const goal = { x: g.home.x, y: g.home.y };
   const start = { x: Math.round( g.x ), y: Math.round( g.y ), first: null };
   const queue = [ start ];
   const seen = new Set( [ start.x + ',' + start.y ] );
@@ -320,11 +337,12 @@ function moveGhost( game, g ) {
     }
 
     if ( g.houseState === 'eaten' ) {
-      if ( isPenCell( g.x, g.y ) ) {
+      if ( g.x === g.home.x && g.y === g.home.y ) {
         g.houseState = 'waiting';
         g.dir = 'up';
-        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
         g.speed = GHOST_SPEED;
+        g.frightened = false;
+        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
         return;
       }
       decideEatenGhost( game, g );
@@ -338,12 +356,10 @@ function moveGhost( game, g ) {
     }
   }
 
-  const d = DIRS[ g.dir ];
   const speed = game.frightMode && g.frightened && g.houseState === 'out'
     ? FRIGHT_GHOST_SPEED
     : g.speed;
-  g.x += d.x * speed;
-  g.y += d.y * speed;
+  advanceToNextCell( g, speed );
   wrapTunnel( g, width );
 }
 
