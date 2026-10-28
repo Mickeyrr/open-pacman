@@ -337,7 +337,9 @@ function collides( a, b ) {
 
 function updateMode( game ) {
   if ( game.state !== 'playing' ) return;
-  game.modeTimer += 1000 / 60; // Approximate frame time
+  // El timer scatter/chase se pausa mientras dura el pellet; elapsedTime no,
+  // para no retrasar las liberaciones del pen.
+  if ( !game.frightMode ) game.modeTimer += 1000 / 60; // Approximate frame time
   game.elapsedTime += 1000 / 60;
 
   if ( game.modeIndex < MODE_SCHEDULE.length ) {
