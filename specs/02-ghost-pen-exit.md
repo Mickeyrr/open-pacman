@@ -1,6 +1,6 @@
 # SPEC 02 — Ghost pen exit
 
-> **Status:** Aprobado
+> **Status:** Implementado
 > **Depends on:** SPEC 01
 > **Date:** 2026-10-28
 > **Objective:** Make every released ghost leave the pen through the door with a forced upward route and prevent it from re-entering once outside.
