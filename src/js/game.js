@@ -13,6 +13,11 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// Geometria de la casa de los fantasmas (filas 13-15, columnas 11-16).
+const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
+const PEN_DOOR_ROW = 12;
+const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
+
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
   { mode: 'chase', time: 20000 },
