@@ -76,7 +76,7 @@ function aligned( v ) {
 
 // Una celda es muro para el actor dado?
 //   pacman: bloqueado por pared (1) y puerta (3)
-//   ghost:  bloqueado solo por pared (1)
+//   ghost:  bloqueado solo por pared (1); la puerta se valida en canMove()
 function isWall( grid, x, y, actor ) {
   if ( y < 0 || y >= grid.length ) return true;
   if ( x < 0 || x >= grid[ 0 ].length ) return true;
@@ -84,6 +84,18 @@ function isWall( grid, x, y, actor ) {
   if ( v === 1 ) return true;
   if ( v === 3 && actor === 'pacman' ) return true;
   return false;
+}
+
+function isDoor( grid, x, y ) {
+  if ( y < 0 || y >= grid.length ) return false;
+  if ( x < 0 || x >= grid[ 0 ].length ) return false;
+  return grid[ y ][ x ] === 3;
+}
+
+function isPenCell( x, y ) {
+  const cx = Math.round( x );
+  const cy = Math.round( y );
+  return cx >= PEN.xMin && cx <= PEN.xMax && cy >= PEN.yMin && cy <= PEN.yMax;
 }
 
 // Puede el actor avanzar desde (x,y) en la direccion dir?
@@ -94,6 +106,10 @@ function canMove( grid, x, y, dir, actor ) {
   const ty = y + d.y;
   // Tunel: salir por un borde en la fila del tunel siempre es valido.
   if ( ty === TUNNEL_ROW && ( tx < 0 || tx >= grid[ 0 ].length ) ) return true;
+  // Puerta de un solo sentido: el fantasma solo la cruza hacia arriba desde dentro.
+  if ( actor === 'ghost' && isDoor( grid, tx, ty ) ) {
+    return dir === 'up' && isPenCell( x, y );
+  }
   return !isWall( grid, tx, ty, actor );
 }
 
