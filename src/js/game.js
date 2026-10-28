@@ -136,6 +136,23 @@ function wrapTunnel( a, width ) {
   }
 }
 
+// Avanza hacia el siguiente centro de celda sin pasarlo, para que cualquier
+// velocidad termine siempre alineada a la rejilla.
+function advanceToNextCell( actor, speed ) {
+  const d = DIRS[ actor.dir ];
+  if ( !d ) return;
+  if ( d.x !== 0 ) actor.x = stepAxis( actor.x, d.x, speed );
+  if ( d.y !== 0 ) actor.y = stepAxis( actor.y, d.y, speed );
+}
+
+function stepAxis( pos, sign, speed ) {
+  const nextCenter = sign > 0 ? Math.ceil( pos + 1e-9 ) : Math.floor( pos - 1e-9 );
+  const distance = Math.abs( nextCenter - pos );
+  // Asignar el entero exacto evita arrastrar error de coma flotante.
+  if ( distance <= speed ) return nextCenter;
+  return pos + sign * speed;
+}
+
 function movePacman( game ) {
   const p = game.pacman;
   const grid = game.grid;
