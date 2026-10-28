@@ -367,6 +367,7 @@ function updateFright( game ) {
 }
 
 function resetPositions( game ) {
+  endFrightened( game );
   const p = game.pacman;
   p.x = PACMAN_START.x;
   p.y = PACMAN_START.y;
@@ -377,7 +378,9 @@ function resetPositions( game ) {
     g.x = start.x;
     g.y = start.y;
     g.dir = 'up';
+    g.speed = GHOST_SPEED;
     g.houseState = 'waiting';
+    g.frightened = false;
     g.releaseTime = i * 1500;
     if ( start.color ) g.color = start.color;
     if ( start.scatter ) g.scatter = { x: start.scatter.x, y: start.scatter.y };
