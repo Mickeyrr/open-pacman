@@ -25,7 +25,6 @@ const EATEN_RELEASE_DELAY = 1000; // ms en el pen antes de volver a salir
 const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
 const PEN_DOOR_ROW = 12;
 const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
-const PEN_TARGET = { x: 13.5, y: 13 };
 
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
@@ -282,8 +281,8 @@ function decideEatenGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
   const height = grid.length;
-  // BFS al pen: el greedy Manhattan se queda oscilando en minimos locales.
-  const goal = { x: Math.floor( PEN_TARGET.x ), y: PEN_TARGET.y };
+  // BFS a su celda de inicio: el greedy Manhattan se queda oscilando en minimos locales.
+  const goal = { x: g.home.x, y: g.home.y };
   const start = { x: Math.round( g.x ), y: Math.round( g.y ), first: null };
   const queue = [ start ];
   const seen = new Set( [ start.x + ',' + start.y ] );
