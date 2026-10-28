@@ -13,10 +13,19 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// Power pellets y modo asustado.
+const POWER_PELLET = 4;
+const FRIGHT_DURATION = 7000;    // ms
+const FRIGHT_BLINK = 2000;       // ultimos ms parpadeando
+const FRIGHT_GHOST_SPEED = 0.05; // celdas/frame
+const GHOST_EAT_SCORES = [ 200, 400, 800, 1600 ];
+const EATEN_RELEASE_DELAY = 1000; // ms en el pen antes de volver a salir
+
 // Geometria de la casa de los fantasmas (filas 13-15, columnas 11-16).
 const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
 const PEN_DOOR_ROW = 12;
 const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
+const PEN_TARGET = { x: 13.5, y: 13 };
 
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
@@ -67,6 +76,9 @@ function createGame() {
     modeTimer: 0,
     modeIndex: 0,
     elapsedTime: 0,
+    frightMode: false,
+    frightTimer: 0,
+    ghostsEatenThisPellet: 0,
   };
 }
 
