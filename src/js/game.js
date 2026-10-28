@@ -337,11 +337,12 @@ function moveGhost( game, g ) {
     }
 
     if ( g.houseState === 'eaten' ) {
-      if ( isPenCell( g.x, g.y ) ) {
+      if ( g.x === g.home.x && g.y === g.home.y ) {
         g.houseState = 'waiting';
         g.dir = 'up';
-        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
         g.speed = GHOST_SPEED;
+        g.frightened = false;
+        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
         return;
       }
       decideEatenGhost( game, g );
