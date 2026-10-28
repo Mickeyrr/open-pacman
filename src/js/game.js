@@ -355,12 +355,10 @@ function moveGhost( game, g ) {
     }
   }
 
-  const d = DIRS[ g.dir ];
   const speed = game.frightMode && g.frightened && g.houseState === 'out'
     ? FRIGHT_GHOST_SPEED
     : g.speed;
-  g.x += d.x * speed;
-  g.y += d.y * speed;
+  advanceToNextCell( g, speed );
   wrapTunnel( g, width );
 }
 
