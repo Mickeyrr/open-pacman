@@ -262,25 +262,36 @@ function decideFrightenedGhost( game, g ) {
 
 function decideEatenGhost( game, g ) {
   const grid = game.grid;
-  // Los ojos ignoran la regla de no-reversa y apuntan al centro del pen.
-  let best = g.dir;
-  let bestDist = Infinity;
-  for ( const dir of Object.keys( DIRS ) ) {
-    if ( !canMove( grid, g.x, g.y, dir, 'ghost', 'eaten' ) ) continue;
-    const d = DIRS[ dir ];
-    let nx = g.x + d.x;
-    let ny = g.y + d.y;
-    if ( ny === TUNNEL_ROW ) {
-      if ( nx < 0 ) nx += grid[ 0 ].length;
-      else if ( nx >= grid[ 0 ].length ) nx -= grid[ 0 ].length;
+  const width = grid[ 0 ].length;
+  const height = grid.length;
+  // BFS al pen: el greedy Manhattan se queda oscilando en minimos locales.
+  const goal = { x: Math.floor( PEN_TARGET.x ), y: PEN_TARGET.y };
+  const start = { x: Math.round( g.x ), y: Math.round( g.y ), first: null };
+  const queue = [ start ];
+  const seen = new Set( [ start.x + ',' + start.y ] );
+
+  while ( queue.length ) {
+    const cur = queue.shift();
+    if ( cur.first && cur.x === goal.x && cur.y === goal.y ) {
+      g.dir = cur.first;
+      return;
     }
-    const dist = Math.abs( nx - PEN_TARGET.x ) + Math.abs( ny - PEN_TARGET.y );
-    if ( dist < bestDist ) {
-      bestDist = dist;
-      best = dir;
+    for ( const dir of Object.keys( DIRS ) ) {
+      if ( !canMove( grid, cur.x, cur.y, dir, 'ghost', 'eaten' ) ) continue;
+      const d = DIRS[ dir ];
+      let nx = cur.x + d.x;
+      let ny = cur.y + d.y;
+      if ( ny === TUNNEL_ROW ) {
+        if ( nx < 0 ) nx += width;
+        else if ( nx >= width ) nx -= width;
+      }
+      if ( ny < 0 || ny >= height ) continue;
+      const key = nx + ',' + ny;
+      if ( seen.has( key ) ) continue;
+      seen.add( key );
+      queue.push( { x: nx, y: ny, first: cur.first || dir } );
     }
   }
-  g.dir = best;
 }
 
 function moveGhost( game, g ) {
