@@ -13,10 +13,19 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// Power pellets y modo asustado.
+const POWER_PELLET = 4;
+const FRIGHT_DURATION = 7000;    // ms
+const FRIGHT_BLINK = 2000;       // ultimos ms parpadeando
+const FRIGHT_GHOST_SPEED = 0.05; // celdas/frame
+const GHOST_EAT_SCORES = [ 200, 400, 800, 1600 ];
+const EATEN_RELEASE_DELAY = 1000; // ms en el pen antes de volver a salir
+
 // Geometria de la casa de los fantasmas (filas 13-15, columnas 11-16).
 const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
 const PEN_DOOR_ROW = 12;
 const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
+const PEN_TARGET = { x: 13.5, y: 13 };
 
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
@@ -61,12 +70,16 @@ function createGame() {
       color: g.color,
       scatter: g.scatter ? { x: g.scatter.x, y: g.scatter.y } : { x: 0, y: -3 },
       houseState: 'waiting',
+      frightened: false,
       releaseTime: i * 1500,
     } ) ),
     mode: 'scatter',
     modeTimer: 0,
     modeIndex: 0,
     elapsedTime: 0,
+    frightMode: false,
+    frightTimer: 0,
+    ghostsEatenThisPellet: 0,
   };
 }
 
@@ -99,15 +112,18 @@ function isPenCell( x, y ) {
 }
 
 // Puede el actor avanzar desde (x,y) en la direccion dir?
-function canMove( grid, x, y, dir, actor ) {
+// ghostState 'eaten' permite cruzar la puerta en cualquier direccion.
+function canMove( grid, x, y, dir, actor, ghostState ) {
   const d = DIRS[ dir ];
   if ( !d ) return false;
   const tx = x + d.x;
   const ty = y + d.y;
   // Tunel: salir por un borde en la fila del tunel siempre es valido.
   if ( ty === TUNNEL_ROW && ( tx < 0 || tx >= grid[ 0 ].length ) ) return true;
-  // Puerta de un solo sentido: el fantasma solo la cruza hacia arriba desde dentro.
+  // Puerta: los ojos la cruzan en cualquier sentido; el resto de fantasmas
+  // solo hacia arriba desde dentro del pen.
   if ( actor === 'ghost' && isDoor( grid, tx, ty ) ) {
+    if ( ghostState === 'eaten' ) return true;
     return dir === 'up' && isPenCell( x, y );
   }
   return !isWall( grid, tx, ty, actor );
@@ -134,11 +150,15 @@ function movePacman( game ) {
       p.dir = p.nextDir;
       p.nextDir = null;
     }
-    // Comer dot.
+    // Comer dot o power pellet.
     if ( grid[ p.y ][ p.x ] === 2 ) {
       grid[ p.y ][ p.x ] = 0;
       game.score += 10;
       game.dotsRemaining--;
+    } else if ( grid[ p.y ][ p.x ] === POWER_PELLET ) {
+      grid[ p.y ][ p.x ] = 0;
+      game.score += 50;
+      startFrightened( game );
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -230,6 +250,50 @@ function decideGhost( game, g ) {
   g.dir = best;
 }
 
+function decideFrightenedGhost( game, g ) {
+  const grid = game.grid;
+  // Movimiento aleatorio sin reversa, salvo que sea el unico camino.
+  const options = Object.keys( DIRS ).filter(
+    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+  );
+  const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
+  g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
+}
+
+function decideEatenGhost( game, g ) {
+  const grid = game.grid;
+  const width = grid[ 0 ].length;
+  const height = grid.length;
+  // BFS al pen: el greedy Manhattan se queda oscilando en minimos locales.
+  const goal = { x: Math.floor( PEN_TARGET.x ), y: PEN_TARGET.y };
+  const start = { x: Math.round( g.x ), y: Math.round( g.y ), first: null };
+  const queue = [ start ];
+  const seen = new Set( [ start.x + ',' + start.y ] );
+
+  while ( queue.length ) {
+    const cur = queue.shift();
+    if ( cur.first && cur.x === goal.x && cur.y === goal.y ) {
+      g.dir = cur.first;
+      return;
+    }
+    for ( const dir of Object.keys( DIRS ) ) {
+      if ( !canMove( grid, cur.x, cur.y, dir, 'ghost', 'eaten' ) ) continue;
+      const d = DIRS[ dir ];
+      let nx = cur.x + d.x;
+      let ny = cur.y + d.y;
+      if ( ny === TUNNEL_ROW ) {
+        if ( nx < 0 ) nx += width;
+        else if ( nx >= width ) nx -= width;
+      }
+      if ( ny < 0 || ny >= height ) continue;
+      const key = nx + ',' + ny;
+      if ( seen.has( key ) ) continue;
+      seen.add( key );
+      queue.push( { x: nx, y: ny, first: cur.first || dir } );
+    }
+  }
+}
+
 function moveGhost( game, g ) {
   const grid = game.grid;
   const width = grid[ 0 ].length;
@@ -255,19 +319,66 @@ function moveGhost( game, g ) {
       }
     }
 
+    if ( g.houseState === 'eaten' ) {
+      if ( isPenCell( g.x, g.y ) ) {
+        g.houseState = 'waiting';
+        g.dir = 'up';
+        g.releaseTime = game.elapsedTime + EATEN_RELEASE_DELAY;
+        g.speed = GHOST_SPEED;
+        return;
+      }
+      decideEatenGhost( game, g );
+      if ( !canMove( grid, g.x, g.y, g.dir, 'ghost', 'eaten' ) ) return;
+    }
+
     if ( g.houseState === 'out' ) {
-      decideGhost( game, g );
+      if ( game.frightMode && g.frightened ) decideFrightenedGhost( game, g );
+      else decideGhost( game, g );
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
     }
   }
 
   const d = DIRS[ g.dir ];
-  g.x += d.x * g.speed;
-  g.y += d.y * g.speed;
+  const speed = game.frightMode && g.frightened && g.houseState === 'out'
+    ? FRIGHT_GHOST_SPEED
+    : g.speed;
+  g.x += d.x * speed;
+  g.y += d.y * speed;
   wrapTunnel( g, width );
 }
 
+function startFrightened( game ) {
+  game.frightMode = true;
+  game.frightTimer = FRIGHT_DURATION;
+  game.ghostsEatenThisPellet = 0;
+  for ( const g of game.ghosts ) {
+    if ( g.houseState === 'eaten' ) continue;
+    g.frightened = true;
+    if ( g.houseState !== 'out' ) continue;
+    // Un unico giro de 180 al activarse el pellet.
+    g.dir = OPPOSITE[ g.dir ];
+    g.speed = FRIGHT_GHOST_SPEED;
+  }
+}
+
+function endFrightened( game ) {
+  game.frightMode = false;
+  game.frightTimer = 0;
+  game.ghostsEatenThisPellet = 0;
+  for ( const g of game.ghosts ) {
+    g.frightened = false;
+    g.speed = GHOST_SPEED;
+  }
+}
+
+function updateFright( game ) {
+  if ( !game.frightMode ) return;
+  game.frightTimer -= 1000 / 60;
+  if ( game.frightTimer <= 0 ) endFrightened( game );
+}
+
 function resetPositions( game ) {
+  endFrightened( game );
   const p = game.pacman;
   p.x = PACMAN_START.x;
   p.y = PACMAN_START.y;
@@ -278,7 +389,9 @@ function resetPositions( game ) {
     g.x = start.x;
     g.y = start.y;
     g.dir = 'up';
+    g.speed = GHOST_SPEED;
     g.houseState = 'waiting';
+    g.frightened = false;
     g.releaseTime = i * 1500;
     if ( start.color ) g.color = start.color;
     if ( start.scatter ) g.scatter = { x: start.scatter.x, y: start.scatter.y };
@@ -296,7 +409,9 @@ function collides( a, b ) {
 
 function updateMode( game ) {
   if ( game.state !== 'playing' ) return;
-  game.modeTimer += 1000 / 60; // Approximate frame time
+  // El timer scatter/chase se pausa mientras dura el pellet; elapsedTime no,
+  // para no retrasar las liberaciones del pen.
+  if ( !game.frightMode ) game.modeTimer += 1000 / 60; // Approximate frame time
   game.elapsedTime += 1000 / 60;
 
   if ( game.modeIndex < MODE_SCHEDULE.length ) {
@@ -315,19 +430,30 @@ function updateMode( game ) {
 
 function update( game ) {
   updateMode( game );
+  updateFright( game );
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
-    if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
-      }
-      resetPositions( game );
-      break;
+    if ( g.houseState === 'eaten' ) continue;
+    if ( !collides( game.pacman, g ) ) continue;
+
+    if ( game.frightMode && g.frightened && g.houseState === 'out' ) {
+      game.score += GHOST_EAT_SCORES[ game.ghostsEatenThisPellet ];
+      game.ghostsEatenThisPellet++;
+      g.houseState = 'eaten';
+      g.frightened = false;
+      g.speed = GHOST_SPEED;
+      break; // una captura por frame
     }
+
+    game.lives--;
+    if ( game.lives <= 0 ) {
+      game.state = 'lost';
+      return;
+    }
+    resetPositions( game );
+    break;
   }
 
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
