@@ -70,6 +70,7 @@ function createGame() {
       color: g.color,
       scatter: g.scatter ? { x: g.scatter.x, y: g.scatter.y } : { x: 0, y: -3 },
       houseState: 'waiting',
+      frightened: false,
       releaseTime: i * 1500,
     } ) ),
     mode: 'scatter',
@@ -320,14 +321,16 @@ function moveGhost( game, g ) {
     }
 
     if ( g.houseState === 'out' ) {
-      if ( game.frightMode ) decideFrightenedGhost( game, g );
+      if ( game.frightMode && g.frightened ) decideFrightenedGhost( game, g );
       else decideGhost( game, g );
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
     }
   }
 
   const d = DIRS[ g.dir ];
-  const speed = game.frightMode && g.houseState === 'out' ? FRIGHT_GHOST_SPEED : g.speed;
+  const speed = game.frightMode && g.frightened && g.houseState === 'out'
+    ? FRIGHT_GHOST_SPEED
+    : g.speed;
   g.x += d.x * speed;
   g.y += d.y * speed;
   wrapTunnel( g, width );
@@ -338,6 +341,8 @@ function startFrightened( game ) {
   game.frightTimer = FRIGHT_DURATION;
   game.ghostsEatenThisPellet = 0;
   for ( const g of game.ghosts ) {
+    if ( g.houseState === 'eaten' ) continue;
+    g.frightened = true;
     if ( g.houseState !== 'out' ) continue;
     // Un unico giro de 180 al activarse el pellet.
     g.dir = OPPOSITE[ g.dir ];
@@ -349,7 +354,10 @@ function endFrightened( game ) {
   game.frightMode = false;
   game.frightTimer = 0;
   game.ghostsEatenThisPellet = 0;
-  for ( const g of game.ghosts ) g.speed = GHOST_SPEED;
+  for ( const g of game.ghosts ) {
+    g.frightened = false;
+    g.speed = GHOST_SPEED;
+  }
 }
 
 function updateFright( game ) {
@@ -413,15 +421,25 @@ function update( game ) {
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
-    if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
-      }
-      resetPositions( game );
-      break;
+    if ( g.houseState === 'eaten' ) continue;
+    if ( !collides( game.pacman, g ) ) continue;
+
+    if ( game.frightMode && g.frightened && g.houseState === 'out' ) {
+      game.score += GHOST_EAT_SCORES[ game.ghostsEatenThisPellet ];
+      game.ghostsEatenThisPellet++;
+      g.houseState = 'eaten';
+      g.frightened = false;
+      g.speed = GHOST_SPEED;
+      break; // una captura por frame
     }
+
+    game.lives--;
+    if ( game.lives <= 0 ) {
+      game.state = 'lost';
+      return;
+    }
+    resetPositions( game );
+    break;
   }
 
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
