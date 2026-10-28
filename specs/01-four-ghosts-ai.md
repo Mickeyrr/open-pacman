@@ -1,6 +1,6 @@
 # SPEC 01 — Four ghosts with classic AI
 
-> **Status:** Draft
+> **Status:** Implementado
 > **Depends on:** None
 > **Date:** 2026-10-28
 > **Objective:** Replace the current two ghosts with four ghosts (Blinky, Pinky, Inky, Clyde), each with distinct classic Pac-Man behavior, with Blinky aggressively chasing Pac-Man.

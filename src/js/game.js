@@ -13,6 +13,11 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// Geometria de la casa de los fantasmas (filas 13-15, columnas 11-16).
+const PEN = { xMin: 11, xMax: 16, yMin: 13, yMax: 15 };
+const PEN_DOOR_ROW = 12;
+const PEN_EXIT_ROW = 11; // primera fila fuera de la casa
+
 const MODE_SCHEDULE = [
   { mode: 'scatter', time: 7000 },
   { mode: 'chase', time: 20000 },
@@ -55,7 +60,7 @@ function createGame() {
       kind: g.kind,
       color: g.color,
       scatter: g.scatter ? { x: g.scatter.x, y: g.scatter.y } : { x: 0, y: -3 },
-      inHouse: true,
+      houseState: 'waiting',
       releaseTime: i * 1500,
     } ) ),
     mode: 'scatter',
@@ -71,7 +76,7 @@ function aligned( v ) {
 
 // Una celda es muro para el actor dado?
 //   pacman: bloqueado por pared (1) y puerta (3)
-//   ghost:  bloqueado solo por pared (1)
+//   ghost:  bloqueado solo por pared (1); la puerta se valida en canMove()
 function isWall( grid, x, y, actor ) {
   if ( y < 0 || y >= grid.length ) return true;
   if ( x < 0 || x >= grid[ 0 ].length ) return true;
@@ -79,6 +84,18 @@ function isWall( grid, x, y, actor ) {
   if ( v === 1 ) return true;
   if ( v === 3 && actor === 'pacman' ) return true;
   return false;
+}
+
+function isDoor( grid, x, y ) {
+  if ( y < 0 || y >= grid.length ) return false;
+  if ( x < 0 || x >= grid[ 0 ].length ) return false;
+  return grid[ y ][ x ] === 3;
+}
+
+function isPenCell( x, y ) {
+  const cx = Math.round( x );
+  const cy = Math.round( y );
+  return cx >= PEN.xMin && cx <= PEN.xMax && cy >= PEN.yMin && cy <= PEN.yMax;
 }
 
 // Puede el actor avanzar desde (x,y) en la direccion dir?
@@ -89,6 +106,10 @@ function canMove( grid, x, y, dir, actor ) {
   const ty = y + d.y;
   // Tunel: salir por un borde en la fila del tunel siempre es valido.
   if ( ty === TUNNEL_ROW && ( tx < 0 || tx >= grid[ 0 ].length ) ) return true;
+  // Puerta de un solo sentido: el fantasma solo la cruza hacia arriba desde dentro.
+  if ( actor === 'ghost' && isDoor( grid, tx, ty ) ) {
+    return dir === 'up' && isPenCell( x, y );
+  }
   return !isWall( grid, tx, ty, actor );
 }
 
@@ -135,9 +156,9 @@ function getTarget( game, g ) {
   const ghosts = game.ghosts;
   const mode = game.mode;
 
-  if ( g.inHouse ) {
-    // Try to go up towards door when in house / leaving
-    return { x: 13.5, y: 11 };
+  if ( g.houseState !== 'out' ) {
+    // Mientras espera o sale, el objetivo es la salida de la casa.
+    return { x: 13.5, y: PEN_EXIT_ROW };
   }
 
   if ( mode === 'scatter' ) {
@@ -217,23 +238,24 @@ function moveGhost( game, g ) {
     g.x = Math.round( g.x );
     g.y = Math.round( g.y );
 
-    // Handle house release
-    if ( g.inHouse ) {
-      if ( game.elapsedTime >= g.releaseTime ) {
-        // Try to exit house - go up through door area
-        if ( canMove( grid, g.x, g.y, 'up', 'ghost' ) ) {
-          g.inHouse = false;
-          g.dir = 'up';
-        } else {
-          // If can't move up, try to decide normally
-          decideGhost( game, g );
-          if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
-        }
-      } else {
-        // Still in house, wait
-        return;
+    // Liberacion y salida de la casa.
+    if ( g.houseState === 'waiting' ) {
+      if ( game.elapsedTime < g.releaseTime ) return;
+      g.houseState = 'exiting';
+      g.dir = 'up';
+    }
+
+    if ( g.houseState === 'exiting' ) {
+      g.dir = 'up';
+      if ( g.y <= PEN_EXIT_ROW ) {
+        g.houseState = 'out';
+      } else if ( !canMove( grid, g.x, g.y, 'up', 'ghost' ) ) {
+        // Guarda defensiva: evita quedarse bloqueado si no puede subir.
+        g.houseState = 'out';
       }
-    } else {
+    }
+
+    if ( g.houseState === 'out' ) {
       decideGhost( game, g );
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost' ) ) return;
     }
@@ -256,7 +278,7 @@ function resetPositions( game ) {
     g.x = start.x;
     g.y = start.y;
     g.dir = 'up';
-    g.inHouse = true;
+    g.houseState = 'waiting';
     g.releaseTime = i * 1500;
     if ( start.color ) g.color = start.color;
     if ( start.scatter ) g.scatter = { x: start.scatter.x, y: start.scatter.y };
