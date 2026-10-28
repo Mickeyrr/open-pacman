@@ -1,6 +1,6 @@
 # SPEC 03 — Power pellets and frightened ghosts
 
-> **Status:** Aprobado
+> **Status:** Implementado
 > **Depends on:** SPEC 01, SPEC 02
 > **Date:** 2026-10-28
 > **Objective:** Add four power pellets worth 50 points that switch every ghost outside the pen into a 7-second frightened mode in which Pac-Man can eat them for 200/400/800/1600 points.
@@ -84,6 +84,7 @@ Rules:
 - `eaten`: the ghost is eyes, ignores collisions, targets `PEN_TARGET`, may cross the door downwards, ignores the no-reverse rule, and becomes `waiting` with `releaseTime = elapsedTime + EATEN_RELEASE_DELAY` when it reaches a pen cell.
 - `waiting` / `exiting`: unaffected by frightened mode except for the blue rendering; they cannot be eaten because Pac-Man cannot enter the pen.
 - `out`: uses random movement while `frightMode` is true, otherwise the existing AI.
+- Each ghost also carries `frightened: false`, a per-pellet immunity flag (not a timer): set when a pellet is eaten, cleared when the ghost is eaten or the mode ends, so a revived ghost is not frightened again by the pellet that ate it.
 
 ## Implementation plan
 
@@ -131,7 +132,7 @@ Rules:
 - **Yes:** pellets award 50 points but do not count towards `dotsRemaining` (user decision). They are a bonus objective, not a win condition.
 - **Yes:** a single global `frightMode` + `frightTimer` instead of per-ghost timers. One pellet affects all ghosts and a new pellet restarts the shared timer.
 - **Yes:** `houseState: 'eaten'` instead of a separate eyes flag. It reuses the existing state machine and its reset logic.
-- **Yes:** eyes may ignore the no-reverse rule and cross the door downwards. Greedy Manhattan with the usual no-reverse rule can otherwise loop above the door.
+- **Yes:** eyes may ignore the no-reverse rule and cross the door downwards. The final implementation uses BFS towards `PEN_TARGET` instead of greedy Manhattan: greedy oscillated forever between adjacent cells (row 5, x13↔x14) after returning from distant corners.
 - **Yes:** 1000 ms in the pen before an eaten ghost exits again. Short enough to matter, long enough to read as a respawn.
 - **Yes:** pause the scatter/chase timer during frightened mode, but keep `elapsedTime`. Release timers must not be delayed by a pellet.
 - **Yes:** random movement while frightened (classic behaviour) instead of fleeing or reusing the chase AI.
@@ -147,8 +148,8 @@ Rules:
 | --- | --- |
 | Changing speed mid-cell could break grid alignment and stop turns or eating | Both `0.1` and `0.05` are multiples of `0.05`, so positions always land on integers within a few frames; the existing `aligned()` check keeps working. |
 | Reversing frightened ghosts could cause endless oscillation in a corridor | The reversal happens once per pellet; afterwards the random choice excludes the reverse and only allows it in a dead end. |
-| Eyes can loop above the door because of the no-reverse rule | Eaten ghosts use a dedicated decision function that allows every valid direction. |
-| A ghost revived while the pellet is still active could become blue again | The ghost leaves the pen as `waiting`/`exiting`; frightened rendering and random movement apply only to `out` ghosts, so it stays normal. |
+| Eyes can loop above the door because of the no-reverse rule | Eaten ghosts use a dedicated BFS decision function; greedy Manhattan oscillated in local minima. |
+| A ghost revived while the pellet is still active could become blue again | Per-ghost `frightened` flag cleared when eaten; a revived ghost exits and moves as a normal ghost even if `frightMode` is still on. |
 | Collision loop awarding points twice in one frame | The collision loop breaks after a ghost is eaten (or after a life is lost), and the ghost is switched to `eaten` before continuing. |
 | Forgetting to reset frightened state on life loss | Covered by plan step 9 and three explicit acceptance criteria. |
 
