@@ -64,6 +64,7 @@ function createGame() {
     ghosts: GHOST_STARTS.map( ( g, i ) => ( {
       x: g.x,
       y: g.y,
+      home: { x: g.x, y: g.y },
       dir: 'up',
       speed: GHOST_SPEED,
       kind: g.kind,
