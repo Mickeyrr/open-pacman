@@ -146,11 +146,15 @@ function movePacman( game ) {
       p.dir = p.nextDir;
       p.nextDir = null;
     }
-    // Comer dot.
+    // Comer dot o power pellet.
     if ( grid[ p.y ][ p.x ] === 2 ) {
       grid[ p.y ][ p.x ] = 0;
       game.score += 10;
       game.dotsRemaining--;
+    } else if ( grid[ p.y ][ p.x ] === POWER_PELLET ) {
+      grid[ p.y ][ p.x ] = 0;
+      game.score += 50;
+      startFrightened( game );
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -279,6 +283,31 @@ function moveGhost( game, g ) {
   wrapTunnel( g, width );
 }
 
+function startFrightened( game ) {
+  game.frightMode = true;
+  game.frightTimer = FRIGHT_DURATION;
+  game.ghostsEatenThisPellet = 0;
+  for ( const g of game.ghosts ) {
+    if ( g.houseState !== 'out' ) continue;
+    // Un unico giro de 180 al activarse el pellet.
+    g.dir = OPPOSITE[ g.dir ];
+    g.speed = FRIGHT_GHOST_SPEED;
+  }
+}
+
+function endFrightened( game ) {
+  game.frightMode = false;
+  game.frightTimer = 0;
+  game.ghostsEatenThisPellet = 0;
+  for ( const g of game.ghosts ) g.speed = GHOST_SPEED;
+}
+
+function updateFright( game ) {
+  if ( !game.frightMode ) return;
+  game.frightTimer -= 1000 / 60;
+  if ( game.frightTimer <= 0 ) endFrightened( game );
+}
+
 function resetPositions( game ) {
   const p = game.pacman;
   p.x = PACMAN_START.x;
@@ -327,6 +356,7 @@ function updateMode( game ) {
 
 function update( game ) {
   updateMode( game );
+  updateFright( game );
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
